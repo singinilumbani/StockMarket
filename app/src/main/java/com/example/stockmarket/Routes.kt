@@ -1,0 +1,17 @@
+package com.example.stockmarket
+
+
+
+object Routes {
+
+    const val LOGIN = "login"
+    const val HOME = "home"
+    const val MARKET = "market"
+    const val PORTFOLIO = "portfolio"
+    const val HISTORY = "history"
+    const val PROFILE = "profile"
+    const val NOTIFICATIONS = "notifications"
+    const val COMPANY = "company/{symbol}"
+
+    fun company(symbol: String) = "company/$symbol"
+}

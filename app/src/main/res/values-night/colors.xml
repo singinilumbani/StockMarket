@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Mode Colors -->
+    <color name="splash_background">#0E0D0A</color>
+    <color name="splash_icon_tint">#E6C55A</color>
+</resources>

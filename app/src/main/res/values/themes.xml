@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.StockMarket" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash screen starting theme -->
+    <style name="Theme.StockMarket.Starting" parent="Theme.SplashScreen">
+        <!-- Background color of the splash screen -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+
+        <!-- Center logo icon (Vector drawable in res/drawable) -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+
+        <!-- Theme to switch to after splash screen dismisses -->
+        <item name="postSplashScreenTheme">@style/Theme.StockMarket</item>
+    </style>
+</resources>
