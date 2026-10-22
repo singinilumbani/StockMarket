@@ -25,7 +25,6 @@ fun TabPlaceholder(
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         TabHeader(
             title = title,
-            unreadCount = 3,
             onNotificationsClick = onNotificationsClick,
             onProfileClick = onProfileClick
         )

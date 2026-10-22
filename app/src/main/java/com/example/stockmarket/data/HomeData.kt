@@ -9,7 +9,8 @@ data class Holding(
     val avgCost: Double
 )
 
-enum class TxType { BUY, SELL, DEPOSIT }
+
+enum class TxType { BUY, SELL, DEPOSIT, WITHDRAWAL }
 
 data class Transaction(
     val id: Int,
@@ -19,10 +20,15 @@ data class Transaction(
     val price: Double,
     val date: String
 ) {
-    // A deposit's "price" is the amount deposited
+    // A deposit or withdrawal moves cash only, with no shares
+    val isCash: Boolean
+        get() = type == TxType.DEPOSIT || type == TxType.WITHDRAWAL
+
+    // For cash, "price" holds the amount of money
     val amount: Double
-        get() = if (type == TxType.DEPOSIT) price else quantity * price
+        get() = if (isCash) price else quantity * price
 }
+
 
 // SAMPLE DATA ONLY
 val sampleHoldings = listOf(

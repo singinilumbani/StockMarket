@@ -3,6 +3,8 @@
 
     <style name="Theme.StockMarket" parent="android:Theme.Material.Light.NoActionBar" />
 
+
+
     <!-- Splash screen starting theme -->
     <style name="Theme.StockMarket.Starting" parent="Theme.SplashScreen">
         <!-- Background color of the splash screen -->

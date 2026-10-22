@@ -16,10 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,12 +47,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.stockmarket.data.Company
-import com.example.stockmarket.data.sampleCompanies
+import com.example.stockmarket.data.builtInCompanies
 import com.example.stockmarket.ui.theme.StockMarketTheme
 import com.example.stockmarket.ui.theme.components.ChangeChip
 import com.example.stockmarket.ui.theme.components.EmptyState
+import com.example.stockmarket.ui.theme.components.MarketSkeleton
 import com.example.stockmarket.ui.theme.components.TabHeader
 import java.util.Locale
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
 // 1) STATEFUL: gets the ViewModel
 @Composable
@@ -69,7 +72,7 @@ fun MarketScreen(
         onTabSelected = viewModel::onTabSelected,
         onSectorSelected = viewModel::onSectorSelected,
         onSortSelected = viewModel::onSortSelected,
-        onClearFilters = viewModel::onClearFilters,
+        onRetry = viewModel::onRetry,
         onCompanyClick = onCompanyClick,
         onNotificationsClick = onNotificationsClick,
         onProfileClick = onProfileClick
@@ -84,7 +87,7 @@ fun MarketContent(
     onTabSelected: (MarketTab) -> Unit,
     onSectorSelected: (String?) -> Unit,
     onSortSelected: (SortOption) -> Unit,
-    onClearFilters: () -> Unit,
+    onRetry: () -> Unit,
     onCompanyClick: (String) -> Unit,
     onNotificationsClick: () -> Unit,
     onProfileClick: () -> Unit
@@ -93,29 +96,37 @@ fun MarketContent(
             state.selectedSector != null ||
             state.tab != MarketTab.ALL
 
+    val countText = when {
+        !filtering -> "${state.companies.size} companies"
+        state.companies.size == 1 -> "1 result"
+        else -> "${state.companies.size} results"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        // Header
         TabHeader(
             title = "Market",
-            unreadCount = 3,
             onNotificationsClick = onNotificationsClick,
             onProfileClick = onProfileClick
         )
 
         Spacer(Modifier.height(8.dp))
 
-        // Search box
+        // Shown when the last download failed. The old prices stay on screen.
+        if (state.error != null) {
+            ErrorBanner(message = state.error, onRetry = onRetry)
+            Spacer(Modifier.height(8.dp))
+        }
+
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
             label = { Text("Search") },
             singleLine = true,
             textStyle = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
-            shape = RoundedCornerShape(20.dp),
             trailingIcon = {
                 if (state.query.isNotEmpty()) {
                     IconButton(onClick = { onQueryChange("") }) {
@@ -123,10 +134,10 @@ fun MarketContent(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(56.dp)
+            modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(8.dp))
 
         // All / Gainers / Losers
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -166,11 +177,7 @@ fun MarketContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = when {
-                    !filtering -> "${state.companies.size} companies"
-                    state.companies.size == 1 -> "1 result"
-                    else -> "${state.companies.size} results"
-                },
+                text = if (state.lastUpdated != null) "$countText · as of ${state.lastUpdated}" else countText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -180,36 +187,56 @@ fun MarketContent(
             SortMenu(current = state.sort, onSortSelected = onSortSelected)
         }
 
-        // List or empty message
-        if (state.companies.isEmpty()) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp)
-            ) {
-                EmptyState(
-                    message = "No companies match your filters"
-                )
-
-                TextButton(
-                    onClick = onClearFilters
-                ) {
-                    Text("Clear filters")
-                }
-            }
-        } else {
+        // Skeleton, empty message, or the list
+        if (state.isLoading) {
+            MarketSkeleton()
+        } else if (state.companies.isEmpty()) {
+            EmptyState(message = "No companies match your filters")
+                 } else {
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = onRetry,
+            modifier = Modifier.fillMaxSize()
+        ) {
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(state.companies, key = { it.symbol }) { company ->
-                    CompanyRow(
-                        company = company,
-                        onClick = { onCompanyClick(company.symbol) }
-                    )
+                    CompanyRow(company = company, onClick = { onCompanyClick(company.symbol) })
                 }
             }
+        }
+    }
+    }
+}
+
+@Composable
+private fun ErrorBanner(message: String, onRetry: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Couldn't update prices", fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = "$message. Showing saved prices.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            TextButton(
+                onClick = onRetry,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                )
+            ) { Text("Retry") }
         }
     }
 }
@@ -249,11 +276,6 @@ fun CompanyRow(company: Company, onClick: () -> Unit) {
                     text = company.name,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = company.sector,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(text = String.format(Locale.US, "%,.2f", company.price))
@@ -273,16 +295,19 @@ fun MarketContentPreview() {
             MarketContent(
                 state = MarketUiState(
                     sectors = listOf("Banking", "Telecoms"),
-                    companies = sampleCompanies
+                    companies = builtInCompanies,
+                    isLoading = false,
+                    error = "No internet connection",
+                    lastUpdated = "2026-10-21"
                 ),
                 onQueryChange = {},
                 onTabSelected = {},
                 onSectorSelected = {},
                 onSortSelected = {},
+                onRetry = {},
                 onCompanyClick = {},
                 onNotificationsClick = {},
-                onProfileClick = {},
-                onClearFilters = {},
+                onProfileClick = {}
             )
         }
     }

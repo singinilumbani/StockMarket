@@ -12,7 +12,7 @@ data class Company (
 
 )
 
-val sampleCompanies = listOf(
+val builtInCompanies = listOf(
     Company(
         "NBM", "National Bank of Malawi", "Banking",
         2010.0, 1.25,

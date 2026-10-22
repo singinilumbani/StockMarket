@@ -38,7 +38,7 @@ import com.example.stockmarket.data.Company
 import com.example.stockmarket.data.RegistrationStatus
 import com.example.stockmarket.data.Transaction
 import com.example.stockmarket.data.TxType
-import com.example.stockmarket.data.sampleCompanies
+import com.example.stockmarket.data.builtInCompanies
 import com.example.stockmarket.data.sampleTransactions
 import com.example.stockmarket.ui.theme.StockMarketTheme
 import com.example.stockmarket.ui.theme.components.ChangeChip
@@ -54,6 +54,7 @@ fun HomeScreen(
     onProfileClick: () -> Unit,
     onRegisterClick: () -> Unit,
     onTradeClick: () -> Unit,
+    onWalletClick: () -> Unit,
     onCompanyClick: (String) -> Unit,
     onSeeAllClick: () -> Unit,
     viewModel: HomeViewModel = viewModel()
@@ -66,6 +67,7 @@ fun HomeScreen(
         onProfileClick = onProfileClick,
         onRegisterClick = onRegisterClick,
         onTradeClick = onTradeClick,
+        onWalletClick = onWalletClick,
         onCompanyClick = onCompanyClick,
         onSeeAllClick = onSeeAllClick
     )
@@ -79,6 +81,7 @@ fun HomeContent(
     onProfileClick: () -> Unit,
     onRegisterClick: () -> Unit,
     onTradeClick: () -> Unit,
+    onWalletClick: () -> Unit,
     onCompanyClick: (String) -> Unit,
     onSeeAllClick: () -> Unit
 ) {
@@ -89,7 +92,6 @@ fun HomeContent(
     ) {
         TabHeader(
             title = "Home",
-            unreadCount = 3,
             onNotificationsClick = onNotificationsClick,
             onProfileClick = onProfileClick
         )
@@ -118,7 +120,17 @@ fun HomeContent(
                 ) {
                     FilledTonalButton(onClick = onTradeClick, modifier = Modifier.weight(1f)) { Text("Buy") }
                     FilledTonalButton(onClick = onTradeClick, modifier = Modifier.weight(1f)) { Text("Sell") }
-                    FilledTonalButton(onClick = { }, modifier = Modifier.weight(1f)) { Text("Deposit") }
+                    FilledTonalButton(onClick = onWalletClick, modifier = Modifier.weight(1f)) { Text("Wallet") }
+                }
+            }
+            item {
+                if (state.watchlist.isEmpty()) {
+                    Text(
+                        text = "Tap the star on a company to follow it here.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    MoversRow("Your watchlist", state.watchlist, onCompanyClick)
                 }
             }
 
@@ -195,19 +207,39 @@ private fun StatusBanner(status: RegistrationStatus, onRegisterClick: () -> Unit
         colors = CardDefaults.cardColors(containerColor = container, contentColor = onContainer),
         modifier = Modifier.fillMaxWidth()
     ) {
+
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = content.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
+
             Spacer(Modifier.height(4.dp))
-            Text(text = content.subtitle, style = MaterialTheme.typography.bodyMedium)
+
+            Text(
+                text = content.subtitle,
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (status == RegistrationStatus.PENDING) {
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = "Estimated time: about 5 seconds",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             if (content.button != null) {
                 Spacer(Modifier.height(12.dp))
-                Button(onClick = onRegisterClick) { Text(content.button) }
+                Button(onClick = onRegisterClick) {
+                    Text(content.button)
+                }
             }
         }
+
     }
 }
 
@@ -278,6 +310,7 @@ private fun ActivityRow(tx: Transaction) {
         TxType.BUY -> "Bought ${tx.symbol}"
         TxType.SELL -> "Sold ${tx.symbol}"
         TxType.DEPOSIT -> "Deposit"
+        TxType.WITHDRAWAL -> "Withdrawal"
     }
     val detail = if (tx.type == TxType.DEPOSIT) tx.date else "${tx.quantity} shares · ${tx.date}"
 
@@ -314,8 +347,8 @@ fun HomeContentPreview() {
                     portfolioValue = 825_900.0,
                     todayChange = 10_488.0,
                     todayChangePct = 1.29,
-                    topGainers = sampleCompanies.take(3),
-                    topLosers = sampleCompanies.takeLast(3),
+                    topGainers = builtInCompanies.take(3),
+                    topLosers = builtInCompanies.takeLast(3),
                     recentActivity = sampleTransactions.takeLast(3)
                 ),
                 onNotificationsClick = {},
@@ -323,7 +356,8 @@ fun HomeContentPreview() {
                 onRegisterClick = {},
                 onTradeClick = {},
                 onCompanyClick = {},
-                onSeeAllClick = {}
+                onSeeAllClick = {},
+                onWalletClick = {},
             )
         }
     }

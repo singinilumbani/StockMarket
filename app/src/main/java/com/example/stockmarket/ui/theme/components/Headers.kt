@@ -32,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.stockmarket.ui.theme.StockMarketTheme
+import androidx.compose.runtime.collectAsState
+import com.example.stockmarket.data.NotificationStore
 
 @Composable
 fun DetailHeader(
@@ -63,7 +65,7 @@ fun DetailHeader(
 @Composable
 fun TabHeader(
     title: String,
-    unreadCount: Int,
+    unreadCount: Int = NotificationStore.unreadCount.collectAsState().value,
     onNotificationsClick: () -> Unit,
     onProfileClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -88,7 +90,10 @@ fun TabHeader(
                     }
                 }
             ) {
-                Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+                Icon(
+                    Icons.Default.Notifications,
+                    contentDescription = if (unreadCount > 0) "Notifications, $unreadCount unread" else "Notifications"
+                )
             }
         }
         Spacer(Modifier.width(4.dp))
@@ -101,10 +106,10 @@ fun TabHeader(
 fun Avatar(initial: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .size(40.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primaryContainer)
-            .clickable(onClick = onClick),
+            .clickable(onClickLabel = "Open profile", onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(

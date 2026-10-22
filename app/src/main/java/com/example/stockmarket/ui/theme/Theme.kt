@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.stockmarket.ui.theme.GoldDark
 import com.example.stockmarket.ui.theme.GoldLight
+import androidx.compose.runtime.CompositionLocalProvider
 
 
 private val DarkColorScheme = darkColorScheme(
@@ -104,9 +105,11 @@ fun StockMarketTheme(
         else -> LightColorScheme
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
