@@ -15,8 +15,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.stockmarket.data.CompanyRepository
-import com.example.stockmarket.data.ThemeMode
+import com.example.stockmarket.data.local.ThemeMode
+import com.example.stockmarket.data.repository.CompanyRepository
+import com.example.stockmarket.navigation.AppNavigation
 import com.example.stockmarket.ui.theme.StockMarketTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
         // MUST be first. It switches from the splash theme to Theme.StockMarket.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        CompanyRepository.init(applicationContext)
 
         // Runs while the app is visible. It stops when the app goes to the background,
         // and starts again, with an immediate refresh, when the app comes back.
@@ -55,8 +57,14 @@ class MainActivity : ComponentActivity() {
             // Keeps the clock and battery icons readable in either theme
             DisposableEffect(darkTheme) {
                 enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkTheme },
-                    navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkTheme }
+                    statusBarStyle = SystemBarStyle.auto(
+                        Color.TRANSPARENT,
+                        Color.TRANSPARENT
+                    ) { darkTheme },
+                    navigationBarStyle = SystemBarStyle.auto(
+                        Color.TRANSPARENT,
+                        Color.TRANSPARENT
+                    ) { darkTheme }
                 )
                 onDispose { }
             }
