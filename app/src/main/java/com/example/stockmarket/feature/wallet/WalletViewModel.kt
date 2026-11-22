@@ -1,9 +1,9 @@
 package com.example.stockmarket.feature.wallet
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.stockmarket.data.model.Transaction
+import com.example.stockmarket.data.repository.OrderRules
 import com.example.stockmarket.data.repository.RegistrationDraft
 import com.example.stockmarket.data.repository.RegistrationStore
 import com.example.stockmarket.data.repository.TradingStore
@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 enum class CashAction(val title: String) {
     DEPOSIT("Deposit"),
@@ -41,18 +42,23 @@ class WalletViewModel : ViewModel() {
         )
     )
 
-    // ---- Called by the screen ----
+    // Instant check while typing. The server checks again.
     fun validate(action: CashAction, amount: Double): String? = when (action) {
-        CashAction.DEPOSIT -> TradingStore.validateDeposit(amount)
-        CashAction.WITHDRAW -> TradingStore.validateWithdrawal(amount)
+        CashAction.DEPOSIT -> OrderRules.validateDeposit(amount)
+        CashAction.WITHDRAW -> OrderRules.validateWithdrawal(amount, TradingStore.cash.value)
     }
 
-    fun confirm(action: CashAction, amount: Double): Boolean = when (action) {
-        CashAction.DEPOSIT -> TradingStore.deposit(amount)
-        CashAction.WITHDRAW -> TradingStore.withdraw(amount)
+    // Asks the server. onResult gets null on success, or the message to show.
+    fun confirm(action: CashAction, amount: Double, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val error = when (action) {
+                CashAction.DEPOSIT -> TradingStore.deposit(amount)
+                CashAction.WITHDRAW -> TradingStore.withdraw(amount)
+            }
+            onResult(error)
+        }
     }
 
-    // ---- Working out what to show ----
     private fun build(
         cash: Double,
         transactions: List<Transaction>,
@@ -73,7 +79,7 @@ class WalletViewModel : ViewModel() {
         )
     }
 
-    // Hides all but the last 2 characters: 0999000000 -> ••••••••00
+    // Hides all but the last 2 characters
     private fun mask(text: String): String =
         if (text.length <= 2) text else "•".repeat(text.length - 2) + text.takeLast(2)
 }

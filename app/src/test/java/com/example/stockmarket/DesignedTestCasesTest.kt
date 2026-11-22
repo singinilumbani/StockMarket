@@ -6,7 +6,7 @@ import com.example.stockmarket.data.model.Transaction
 import com.example.stockmarket.data.model.TxType
 import com.example.stockmarket.data.repository.OrderSide
 import com.example.stockmarket.data.repository.RegistrationDraft
-import com.example.stockmarket.data.repository.TradingStore
+
 import com.example.stockmarket.data.repository.validatePassword
 import com.example.stockmarket.feature.auth.LoginUiState
 import com.example.stockmarket.feature.auth.SignUpUiState
@@ -24,9 +24,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.example.stockmarket.data.repository.OrderRules
 
-// Automated versions of the cases in "MSE Invest Test Case Design".
-// Each test name starts with the document's Test Case ID.
+
 @Suppress("FunctionName")
 @OptIn(ExperimentalCoroutinesApi::class)
 class DesignedTestCasesTest {
@@ -147,14 +147,14 @@ class DesignedTestCasesTest {
 
     @Test
     fun TRD_BUY_006_121Shares_isAllowed() {
-        assertNull(TradingStore.validate("NBM", OrderSide.BUY, 121, 2010.0))
+        assertNull(OrderRules.validateOrder(OrderSide.BUY, 121, 2010.0, cash = 250_000.0, owned = 300))
     }
 
     @Test
     fun TRD_BUY_007_122Shares_isRefused() {
         assertEquals(
             "Not enough cash. You need MK 250,124.40 but have MK 250,000.00",
-            TradingStore.validate("NBM", OrderSide.BUY, 122, 2010.0)
+            OrderRules.validateOrder(OrderSide.BUY, 121, 2010.0, cash = 250_000.0, owned = 300)
         )
     }
 
@@ -169,34 +169,34 @@ class DesignedTestCasesTest {
 
     @Test
     fun TRD_SELL_002_301SharesWhen300Owned_isRefused() {
-        assertEquals("You only own 300 shares", TradingStore.validate("NBM", OrderSide.SELL, 301, 2010.0))
+        assertEquals("You only own 300 shares", OrderRules.validateOrder(OrderSide.SELL, 301, 2010.0, cash = 250_000.0, owned = 300))
     }
 
     @Test
     fun TRD_SELL_003_companyNotOwned_isRefused() {
-        assertEquals("You only own 0 shares", TradingStore.validate("OMU", OrderSide.SELL, 1, 3040.0))
+        assertEquals("You only own 0 shares", OrderRules.validateOrder(OrderSide.SELL, 1, 3040.0, cash = 250_000.0, owned = 0))
     }
 
     // ---------------- Wallet ----------------
 
     @Test
     fun WAL_DEPOSIT_002_500_isBelowTheMinimum() {
-        assertEquals("The minimum is MK 1,000", TradingStore.validateDeposit(500.0))
+        assertEquals("The minimum is MK 1,000", OrderRules.validateDeposit(500.0))
     }
 
     @Test
     fun WAL_DEPOSIT_003_exactlyTheMinimum_isAccepted() {
-        assertNull(TradingStore.validateDeposit(1_000.0))
+        assertNull(OrderRules.validateDeposit(1_000.0))
     }
 
     @Test
     fun WAL_WITHDRAW_002_moreThanTheBalance_isRefused() {
-        assertEquals("You only have MK 250,000.00 available", TradingStore.validateWithdrawal(250_001.0))
+        assertEquals("You only have MK 250,000.00 available", OrderRules.validateWithdrawal(250_001.0, cash = 250_000.0))
     }
 
     @Test
     fun WAL_WITHDRAW_003_exactlyTheBalance_isAccepted() {
-        assertNull(TradingStore.validateWithdrawal(250_000.0))
+        assertNull(OrderRules.validateWithdrawal(250_001.0, cash = 250_000.0))
     }
 
     // ---------------- History ----------------

@@ -21,6 +21,10 @@ import com.example.stockmarket.navigation.AppNavigation
 import com.example.stockmarket.ui.theme.StockMarketTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.example.stockmarket.data.repository.SessionManager
+import com.example.stockmarket.data.repository.SessionState
+import com.example.stockmarket.data.repository.TradingStore
+import com.example.stockmarket.data.repository.RegistrationStore
 
 // How often to ask the server for new prices. Use 20_000L (20 seconds) while testing.
 private const val REFRESH_EVERY_MS = 5 * 60 * 1000L
@@ -28,9 +32,13 @@ private const val REFRESH_EVERY_MS = 5 * 60 * 1000L
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // MUST be first. It switches from the splash theme to Theme.StockMarket.
-        installSplashScreen()
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         CompanyRepository.init(applicationContext)
+        SessionManager.init(applicationContext)
+
+        // Keep the splash screen until we know whether a saved login exists
+        splash.setKeepOnScreenCondition { SessionManager.state.value is SessionState.Loading }
 
         // Runs while the app is visible. It stops when the app goes to the background,
         // and starts again, with an immediate refresh, when the app comes back.
@@ -38,6 +46,9 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
                     CompanyRepository.refresh()
+                    SessionManager.verify()
+                    if (SessionManager.currentToken() != null) TradingStore.refresh()
+                    if (SessionManager.currentToken() != null) RegistrationStore.refresh()
                     delay(REFRESH_EVERY_MS)
                 }
             }

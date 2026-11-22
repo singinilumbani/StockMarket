@@ -6,6 +6,9 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
+import com.example.stockmarket.data.repository.SessionManager
+import okhttp3.Interceptor
+import okhttp3.Response
 
 // What the server sends. The names must match the JSON keys exactly.
 data class CompanyDto(
@@ -19,38 +22,64 @@ data class CompanyDto(
 )
 
 object ApiConfig {
-
-    const val BASE_URL =
-        "https://raw.githubusercontent.com/singinilumbani/mse-mock-api/refs/heads/main/api/v1/"
+    const val BASE_URL = "http://10.255.208.194:8080/api/v1/"
 }
 
 interface MseApi {
     // The path is added to BASE_URL
-    @GET("companies.json")
+    @GET("companies")
     suspend fun getCompanies(): List<CompanyDto>
 }
 
 object Api {
+
+    // Every request passes through here
+    private class AuthInterceptor : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val original = chain.request()
+            val token = SessionManager.currentToken()
+
+            // 1) Add "Authorization: Bearer <token>" when we are logged in
+            val request = if (token != null) {
+                original.newBuilder().header("Authorization", "Bearer $token").build()
+            } else {
+                original
+            }
+
+            val response = chain.proceed(request)
+
+
+            if (response.code == 401 && token != null && !original.url.encodedPath.contains("/auth/")) {
+                SessionManager.onSessionExpired()
+            }
+            return response
+        }
+    }
+
     private val client = OkHttpClient.Builder()
-        // BASIC prints one line per request and one per answer in Logcat
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        })
+        .addInterceptor(AuthInterceptor())
+        .addInterceptor(
+            HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+                redactHeader("Authorization")   // never print the token in Logcat
+            }
+        )
         .build()
 
-    // "by lazy" builds Retrofit the first time it's used. A wrong address now throws an
-    // exception we can catch, instead of crashing the app while it starts.
-    val service: MseApi by lazy {
+    private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(ApiConfig.BASE_URL)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-            .create(MseApi::class.java)
     }
+
+    val service: MseApi by lazy { retrofit.create(MseApi::class.java) }
+    val auth: AuthApi by lazy { retrofit.create(AuthApi::class.java) }
+    val account: AccountApi by lazy { retrofit.create(AccountApi::class.java) }
+    val kyc: KycApi by lazy { retrofit.create(KycApi::class.java) }
 }
 
-// Turns the server's shape into the shape our app uses
 fun CompanyDto.toCompany() = Company(
     symbol = symbol,
     name = name,

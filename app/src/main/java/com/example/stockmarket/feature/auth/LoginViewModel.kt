@@ -1,10 +1,8 @@
 package com.example.stockmarket.feature.auth
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.stockmarket.data.repository.AuthStore
-import kotlinx.coroutines.delay
+import com.example.stockmarket.data.repository.SessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,16 +22,13 @@ data class LoginUiState(
 
 class LoginViewModel : ViewModel() {
 
-    private val _uiState = MutableStateFlow(LoginUiState())
+    // If the session just expired, the first thing the user sees is the reason
+    private val _uiState = MutableStateFlow(LoginUiState(error = SessionManager.takeNotice()))
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     // ---- Events from the screen. Typing clears the old error message. ----
-    fun onIdentifierChange(value: String) =
-        _uiState.update { it.copy(identifier = value, error = null) }
-
-    fun onPasswordChange(value: String) =
-        _uiState.update { it.copy(password = value, error = null) }
-
+    fun onIdentifierChange(value: String) = _uiState.update { it.copy(identifier = value, error = null) }
+    fun onPasswordChange(value: String) = _uiState.update { it.copy(password = value, error = null) }
     fun onToggleShowPassword() = _uiState.update { it.copy(showPassword = !it.showPassword) }
 
     fun login(onSuccess: () -> Unit) {
@@ -42,8 +37,10 @@ class LoginViewModel : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            delay(700) // pretend the server takes a moment to answer
-            val error = AuthStore.login(state.identifier, state.password)
+
+            // The real network call replaces the fake 700 ms pause
+            val error = SessionManager.login(state.identifier, state.password)
+
             _uiState.update {
                 it.copy(
                     isLoading = false,

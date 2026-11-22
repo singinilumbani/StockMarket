@@ -56,7 +56,7 @@ fun OrderScreen(
         state = state,
         onQuantityChange = viewModel::onQuantityChange,
         onBack = onBack,
-        onPlaceOrder = { viewModel.placeOrder()?.let(onOrderPlaced) }
+        onPlaceOrder = { viewModel.placeOrder(onOrderPlaced) }
     )
 }
 

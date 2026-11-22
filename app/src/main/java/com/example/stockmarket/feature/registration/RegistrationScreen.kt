@@ -13,12 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
@@ -55,18 +57,17 @@ fun RegistrationScreen(
     onSubmitted: () -> Unit,
     viewModel: RegistrationViewModel = viewModel()
 ) {
-    val draft by viewModel.draft.collectAsState()
+    val state by viewModel.uiState.collectAsState()
 
     RegistrationContent(
-        draft = draft,
+        draft = state.draft,
         onChange = viewModel::update,
         onNext = viewModel::next,
         onPrevious = viewModel::back,
-        onSubmit = {
-            viewModel.submit()
-            onSubmitted()
-        },
-        onExit = onBack
+        onSubmit = { viewModel.submit(onSubmitted) },
+        onExit = { viewModel.saveAndExit(onBack) },
+        submitError = state.error,
+        isSubmitting = state.isSubmitting
     )
 }
 
@@ -78,16 +79,17 @@ fun RegistrationContent(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSubmit: () -> Unit,
-    onExit: () -> Unit
+    onExit: () -> Unit,
+    submitError: String? = null,
+    isSubmitting: Boolean = false
 ) {
     val isLastStep = draft.step == registrationSteps.lastIndex
+    val allowed = canContinue(draft) && !isSubmitting
 
     // The phone's Back button goes to the previous step first
     BackHandler(enabled = draft.step > 0) { onPrevious() }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .imePadding()) {
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
 
         DetailHeader(
             title = "Register to trade",
@@ -108,7 +110,7 @@ fun RegistrationContent(
             )
         }
 
-        // The current step
+        // The current step (takes all the space that is left)
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -125,35 +127,62 @@ fun RegistrationContent(
             }
         }
 
-        // Back / Next buttons
-        Row(
+        // Bottom area: messages, Back / Next, then Save and finish later
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            if (draft.step > 0) {
-                OutlinedButton(
-                    onClick = onPrevious,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp)
-                ) { Text("Back") }
+            // The server's reason when it refused the registration
+            if (submitError != null) {
+                Text(
+                    text = submitError,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            } else if (!allowed && !isSubmitting) {
+                Text(
+                    text = "Complete this step to continue",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
             }
-            Button(
-                onClick = if (isLastStep) onSubmit else onNext,
-                enabled = canContinue(draft),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-            ) { Text(if (isLastStep) "Submit" else "Next") }
 
-        }
-        TextButton(
-            onClick = onExit,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Save and finish later")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (draft.step > 0) {
+                    OutlinedButton(
+                        onClick = onPrevious,
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(52.dp)
+                    ) { Text("Back") }
+                }
+                Button(
+                    onClick = if (isLastStep) onSubmit else onNext,
+                    enabled = allowed,
+                    modifier = Modifier.weight(1f).height(52.dp)
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(if (isLastStep) "Submit" else "Next")
+                    }
+                }
+            }
+
+            TextButton(
+                onClick = onExit,
+                enabled = !isSubmitting,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Save and finish later") }
         }
     }
 }

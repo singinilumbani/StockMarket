@@ -20,6 +20,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 import com.example.stockmarket.data.remote.toCompany
+import java.net.UnknownHostException
 
 data class LoadState(
     val isLoading: Boolean = false,
@@ -105,8 +106,10 @@ object CompanyRepository {
                 )
             } catch (e: CancellationException) {
                 throw e   // never swallow this one, coroutines use it to stop work
+            } catch (e: UnknownHostException) {
+            fail("No internet connection")
             } catch (e: IOException) {
-                fail("No internet connection")
+            fail("Can't reach the server")
             } catch (e: HttpException) {
                 fail("The server returned an error (${e.code()})")
             } catch (e: IllegalArgumentException) {

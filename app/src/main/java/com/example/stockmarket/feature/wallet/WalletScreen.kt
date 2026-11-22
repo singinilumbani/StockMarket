@@ -76,12 +76,14 @@ fun WalletContent(
     state: WalletUiState,
     onBack: () -> Unit,
     validate: (CashAction, Double) -> String?,
-    onConfirm: (CashAction, Double) -> Boolean
+    onConfirm: (CashAction, Double, (String?) -> Unit) -> Unit
 ) {
-    // Which sheet is open (null = none), what was typed, and the message after it worked
+    // Which sheet is open (null = none), what was typed, and the messages
     var action by rememberSaveable { mutableStateOf<CashAction?>(null) }
     var amountText by rememberSaveable { mutableStateOf("") }
     var resultMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var serverError by rememberSaveable { mutableStateOf<String?>(null) }   // the server said no
+    var isSending by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
 
@@ -100,15 +102,11 @@ fun WalletContent(
                 ) {
                     Button(
                         onClick = { action = CashAction.DEPOSIT },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
+                        modifier = Modifier.weight(1f).height(52.dp)
                     ) { Text("Deposit") }
                     OutlinedButton(
                         onClick = { action = CashAction.WITHDRAW },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
+                        modifier = Modifier.weight(1f).height(52.dp)
                     ) { Text("Withdraw") }
                 }
             }
@@ -161,6 +159,8 @@ fun WalletContent(
         val close = {
             action = null
             amountText = ""
+            serverError = null
+            isSending = false
         }
 
         ModalBottomSheet(onDismissRequest = close) {
@@ -180,13 +180,16 @@ fun WalletContent(
 
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { amountText = it.filter(Char::isDigit).take(9) },
+                    onValueChange = {
+                        amountText = it.filter(Char::isDigit).take(9)
+                        serverError = null
+                    },
                     label = { Text("Amount (MK)") },
                     singleLine = true,
-                    isError = error != null,
+                    isError = error != null || serverError != null,
                     supportingText = {
                         Text(
-                            error ?: if (currentAction == CashAction.WITHDRAW) {
+                            error ?: serverError ?: if (currentAction == CashAction.WITHDRAW) {
                                 String.format(Locale.US, "Available: MK %,.2f", state.cash)
                             } else {
                                 "Minimum MK 1,000"
@@ -202,7 +205,10 @@ fun WalletContent(
                     listOf(5_000, 10_000, 50_000).forEach { quick ->
                         FilterChip(
                             selected = false,
-                            onClick = { amountText = quick.toString() },
+                            onClick = {
+                                amountText = quick.toString()
+                                serverError = null
+                            },
                             label = { Text(String.format(Locale.US, "%,d", quick)) }
                         )
                     }
@@ -216,17 +222,21 @@ fun WalletContent(
 
                 Button(
                     onClick = {
-                        if (onConfirm(currentAction, amount)) {
-                            resultMessage = String.format(
-                                Locale.US,
-                                "%s of MK %,.2f is complete.",
-                                currentAction.title,
-                                amount
-                            )
-                            close()
+                        isSending = true
+                        // The server decides. We find out in the callback.
+                        onConfirm(currentAction, amount) { problem ->
+                            isSending = false
+                            if (problem == null) {
+                                resultMessage = String.format(
+                                    Locale.US, "%s of MK %,.2f is complete.", currentAction.title, amount
+                                )
+                                close()
+                            } else {
+                                serverError = problem
+                            }
                         }
                     },
-                    enabled = amount > 0 && error == null,
+                    enabled = amount > 0 && error == null && !isSending,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
@@ -315,7 +325,7 @@ fun WalletContentPreview() {
                 ),
                 onBack = {},
                 validate = { _, _ -> null },
-                onConfirm = { _, _ -> true }
+                onConfirm = { _, _, done -> done(null) }
             )
         }
     }

@@ -40,7 +40,7 @@ fun DetailHeader(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    actions: @Composable () -> Unit = {}   // this is a "slot"
+    actions: @Composable () -> Unit = {}
 ) {
     Row(
         modifier = modifier

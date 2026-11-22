@@ -1,6 +1,5 @@
 package com.example.stockmarket.feature.trade
 
-
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -22,7 +21,8 @@ data class OrderUiState(
     val quantityText: String = "",
     val cash: Double = 0.0,
     val owned: Int = 0,
-    val error: String? = null
+    val error: String? = null,
+    val isPlacing: Boolean = false       // true while the server is answering
 ) {
     val quantity: Int get() = quantityText.toIntOrNull() ?: 0
     val subtotal: Double get() = (company?.price ?: 0.0) * quantity
@@ -30,7 +30,7 @@ data class OrderUiState(
     val total: Double get() = if (side == OrderSide.BUY) subtotal + fees else subtotal - fees
 
     val canPlace: Boolean
-        get() = quantity > 0 && error == null
+        get() = quantity > 0 && error == null && !isPlacing
 }
 
 class OrderViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
@@ -39,7 +39,6 @@ class OrderViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
     private val symbol: String = savedStateHandle["symbol"] ?: ""
     private val side: OrderSide =
         if (savedStateHandle.get<String>("side") == "SELL") OrderSide.SELL else OrderSide.BUY
-
     private val company: Company? = CompanyRepository.find(symbol)
 
     private val _uiState = MutableStateFlow(OrderUiState(company = company, side = side))
@@ -60,10 +59,21 @@ class OrderViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
         change { it.copy(quantityText = text.filter { c -> c.isDigit() }.take(7)) }
     }
 
-    fun placeOrder(): Int? {
+    // Sends the order to the server. onPlaced gets the new order's id when the server accepts it.
+    fun placeOrder(onPlaced: (Int) -> Unit) {
         val state = _uiState.value
-        val company = state.company ?: return null
-        return TradingStore.placeOrder(company.symbol, state.side, state.quantity, company.price)
+        val company = state.company ?: return
+        if (!state.canPlace) return                         // also blocks a second tap
+
+        _uiState.update { it.copy(isPlacing = true) }       // set at once, before the coroutine starts
+
+        viewModelScope.launch {
+            val result = TradingStore.placeOrder(company.symbol, state.side, state.quantity)
+
+            // If the server said no, its message is shown under the quantity field
+            _uiState.update { it.copy(isPlacing = false, error = result.error) }
+            result.orderId?.let(onPlaced)
+        }
     }
 
     // Applies an edit, then re-checks the order

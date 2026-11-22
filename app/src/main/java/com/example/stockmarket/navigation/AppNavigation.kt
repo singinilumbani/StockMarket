@@ -31,7 +31,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.stockmarket.feature.registration.RegistrationScreen
 import com.example.stockmarket.SettingsScreen
-import com.example.stockmarket.data.repository.AuthStore
 import com.example.stockmarket.data.repository.RegistrationStore
 import com.example.stockmarket.data.repository.WatchlistStore
 import com.example.stockmarket.feature.auth.LoginScreen
@@ -46,6 +45,12 @@ import com.example.stockmarket.feature.profile.ProfileScreen
 import com.example.stockmarket.feature.wallet.WalletScreen
 import com.example.stockmarket.feature.trade.OrderScreen
 import com.example.stockmarket.feature.trade.OrderStatusScreen
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import com.example.stockmarket.data.repository.SessionManager
+import com.example.stockmarket.data.repository.SessionState
 
 
 
@@ -63,10 +68,39 @@ private val tabs = listOf(
     TabItem(Routes.PROFILE, "Profile", Icons.Filled.Person),
 )
 
-@OptIn(ExperimentalLayoutApi::class)
+// Waits until the saved login has been read, then opens the right first screen
 @Composable
 fun AppNavigation() {
+    val session by SessionManager.state.collectAsState()
+
+    if (session is SessionState.Loading) {
+        Box(Modifier.fillMaxSize())   // the splash screen is still covering this
+    } else {
+        // Decided once, the first time we know the answer
+        val startDestination = remember {
+            if (session is SessionState.LoggedIn) Routes.HOME else Routes.LOGIN
+        }
+        AppNavHost(startDestination = startDestination)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AppNavHost(startDestination: String) {
     val navController = rememberNavController()
+
+// When the session ends (logout or expiry), clear the history and go to Log in
+    val session by SessionManager.state.collectAsState()
+    LaunchedEffect(session) {
+        if (session is SessionState.LoggedOut) {
+            val route = navController.currentDestination?.route
+            if (route != null && route != Routes.LOGIN && route != Routes.SIGNUP) {
+                navController.navigate(Routes.LOGIN) {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                }
+            }
+        }
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
@@ -180,12 +214,7 @@ fun AppNavigation() {
                     onProfileClick = { goToTab(Routes.PROFILE) },
                     onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                     onRegisterClick = { navController.navigate(Routes.REGISTER) },
-                    onLogout = {
-                        AuthStore.logout()
-                        navController.navigate(Routes.LOGIN) {
-                            popUpTo(navController.graph.id) { inclusive = true }
-                        }
-                    }
+                    onLogout = { SessionManager.logout() }
                 )
             }
 

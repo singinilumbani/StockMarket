@@ -1,13 +1,11 @@
 package com.example.stockmarket.feature.auth
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.stockmarket.data.repository.AuthStore
+import com.example.stockmarket.data.repository.SessionManager
 import com.example.stockmarket.data.repository.validateIdentifier
 import com.example.stockmarket.data.repository.validateName
 import com.example.stockmarket.data.repository.validatePassword
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +29,7 @@ data class SignUpUiState(
 
     val confirmError: String?
         get() = if (showErrors && confirm != password) "Passwords do not match" else null
+
     val isValid: Boolean
         get() = validateName(fullName) == null &&
                 validateIdentifier(identifier) == null &&
@@ -44,18 +43,10 @@ class SignUpViewModel : ViewModel() {
     val uiState: StateFlow<SignUpUiState> = _uiState.asStateFlow()
 
     // ---- Events from the screen. Typing clears the old form error. ----
-    fun onNameChange(value: String) =
-        _uiState.update { it.copy(fullName = value, formError = null) }
-
-    fun onIdentifierChange(value: String) =
-        _uiState.update { it.copy(identifier = value, formError = null) }
-
-    fun onPasswordChange(value: String) =
-        _uiState.update { it.copy(password = value, formError = null) }
-
-    fun onConfirmChange(value: String) =
-        _uiState.update { it.copy(confirm = value, formError = null) }
-
+    fun onNameChange(value: String) = _uiState.update { it.copy(fullName = value, formError = null) }
+    fun onIdentifierChange(value: String) = _uiState.update { it.copy(identifier = value, formError = null) }
+    fun onPasswordChange(value: String) = _uiState.update { it.copy(password = value, formError = null) }
+    fun onConfirmChange(value: String) = _uiState.update { it.copy(confirm = value, formError = null) }
     fun onToggleShowPassword() = _uiState.update { it.copy(showPassword = !it.showPassword) }
 
     fun submit(onSuccess: () -> Unit) {
@@ -70,13 +61,14 @@ class SignUpViewModel : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, showErrors = true, formError = null) }
-            delay(800) // pretend the server takes a moment to answer
-            val error = AuthStore.register(state.fullName, state.identifier, state.password)
+
+            // The server checks everything again and creates the account
+            val error = SessionManager.register(state.fullName, state.identifier, state.password)
+
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     formError = error,
-                    // Do not keep the passwords in memory once they have been used
                     password = if (error == null) "" else it.password,
                     confirm = if (error == null) "" else it.confirm
                 )

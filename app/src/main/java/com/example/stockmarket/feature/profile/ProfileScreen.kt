@@ -135,7 +135,7 @@ fun ProfileContent(
 
             item {
                 Text(
-                    text = "MSE Invest · version 0.1 · university project",
+                    text = "StockMarket· version 5.0 · Certified lover boy  ",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
