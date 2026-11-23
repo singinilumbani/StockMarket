@@ -1,5 +1,6 @@
 package com.example.stockmarket.data.repository
 
+import com.example.stockmarket.data.local.AccountCache
 import com.example.stockmarket.data.model.Holding
 import com.example.stockmarket.data.model.Transaction
 import com.example.stockmarket.data.model.TxType
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -57,7 +59,19 @@ object TradingStore {
     private val _orders = MutableStateFlow<List<Order>>(emptyList())
     val orders: StateFlow<List<Order>> = _orders.asStateFlow()
 
+    // When the numbers on screen were last confirmed by the server, or loaded from the saved copy.
+    // null means we have nothing yet.
+    private val _lastSynced = MutableStateFlow<Long?>(null)
+    val lastSynced: StateFlow<Long?> = _lastSynced.asStateFlow()
+
+    // Set when the last refresh failed, so the numbers on screen may be out of date.
+    // Cleared by the next successful answer.
+    private val _syncError = MutableStateFlow<String?>(null)
+    val syncError: StateFlow<String?> = _syncError.asStateFlow()
+
     private var pollJob: Job? = null
+    private var currentUserId: Int? = null
+    private var generation = 0          // goes up on every logout, so late answers are ignored
 
     // ---------- Instant checks while the user types ----------
 
@@ -68,13 +82,44 @@ object TradingStore {
 
     // ---------- Talking to the server ----------
 
-    // Called right after a login. Fetches the user's account in the background.
-    fun onLoggedIn() {
-        scope.launch { refresh() }
+    // Called right after a login
+    fun onLoggedIn(userId: Int) {
+        if (currentUserId != null && currentUserId != userId) clear()
+        currentUserId = userId
+        val gen = generation
+        scope.launch {
+            // 1) Show what we saved last time, so the screens are truthful even when offline
+            val cached = AccountCache.readAccount(userId)
+            if (cached != null && gen == generation && _lastSynced.value == null) {
+                applySnapshot(cached.account, fromCache = true)
+                _lastSynced.value = cached.savedAt
+            }
+            // 2) Then ask the server. If it answers first, the saved copy was never used.
+            refresh()
+        }
     }
 
     // Returns an error message, or null when it worked
-    suspend fun refresh(): String? = attempt { applySnapshot(Api.account.account()) }
+    suspend fun refresh(): String? {
+        val gen = generation
+        val error = attempt {
+            val account = Api.account.account()
+            if (gen == generation) applySnapshot(account)      // ignore an answer that arrives after a logout
+        }
+        // Any failed refresh means the numbers on screen may be old
+        if (error != null && gen == generation) _syncError.value = error
+        return error
+    }
+
+    // For the Retry button
+    fun retry() {
+        scope.launch { retryNow() }
+    }
+
+    suspend fun retryNow() {
+        refresh()
+        RegistrationStore.refresh()
+    }
 
     suspend fun placeOrder(symbol: String, side: OrderSide, quantity: Int): PlaceOrderResult {
         return try {
@@ -84,6 +129,7 @@ object TradingStore {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (e is IOException) _syncError.value = errorMessageOf(e)
             PlaceOrderResult(null, errorMessageOf(e))
         }
     }
@@ -112,11 +158,24 @@ object TradingStore {
 
     // Called when the user logs out, so the next user never sees this data
     fun clear() {
+        generation++
+        currentUserId = null
         pollJob?.cancel()
         _cash.value = 0.0
         _holdings.value = emptyList()
         _transactions.value = emptyList()
         _orders.value = emptyList()
+        _lastSynced.value = null
+        _syncError.value = null
+        scope.launch {
+            try {
+                AccountCache.clear()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // ignored on purpose
+            }
+        }
     }
 
     // ---------- Internals ----------
@@ -127,11 +186,14 @@ object TradingStore {
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        // A network problem means we are offline. A rule such as "Not enough cash" means the
+        // server DID answer, so we are not.
+        if (e is IOException) _syncError.value = errorMessageOf(e)
         errorMessageOf(e)
     }
 
-    // Replaces the whole copy with what the server says
-    private fun applySnapshot(account: AccountDto) {
+    // Replaces the whole copy with what the server says (or with the saved copy, when fromCache is true)
+    private fun applySnapshot(account: AccountDto, fromCache: Boolean = false) {
         val before = _orders.value.associateBy { it.id }
         val newOrders = account.orders.map { it.toOrder() }
 
@@ -160,7 +222,29 @@ object TradingStore {
         }
         _orders.value = newOrders
 
-        if (newOrders.any { it.status == OrderStatus.SUBMITTED }) pollWhileWaiting()
+        if (!fromCache) {
+            // The server just confirmed these numbers
+            val now = System.currentTimeMillis()
+            _lastSynced.value = now
+            _syncError.value = null
+            saveToCache(account, now)
+            if (newOrders.any { it.status == OrderStatus.SUBMITTED }) pollWhileWaiting()
+        }
+    }
+
+    private fun saveToCache(account: AccountDto, savedAt: Long) {
+        val userId = currentUserId ?: return
+        val gen = generation
+        scope.launch {
+            if (gen != generation) return@launch                // the user logged out meanwhile
+            try {
+                AccountCache.saveAccount(userId, savedAt, account)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // a failed save must never break the app
+            }
+        }
     }
 
     // The broker answers after a few seconds, so ask again every second until no order is waiting

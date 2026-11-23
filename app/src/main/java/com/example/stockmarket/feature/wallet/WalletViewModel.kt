@@ -21,7 +21,8 @@ enum class CashAction(val title: String) {
 data class WalletUiState(
     val cash: Double = 0.0,
     val accountLabel: String = "No payment account saved yet",
-    val cashHistory: List<Transaction> = emptyList()
+    val cashHistory: List<Transaction> = emptyList(),
+    val isOffline: Boolean = false      // true while the server cannot be reached
 )
 
 class WalletViewModel : ViewModel() {
@@ -29,16 +30,18 @@ class WalletViewModel : ViewModel() {
     val uiState: StateFlow<WalletUiState> = combine(
         TradingStore.cash,
         TradingStore.transactions,
-        RegistrationStore.draft
-    ) { cash, transactions, draft ->
-        build(cash, transactions, draft)
+        RegistrationStore.draft,
+        TradingStore.syncError
+    ) { cash, transactions, draft, syncError ->
+        build(cash, transactions, draft, syncError != null)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
         initialValue = build(
             TradingStore.cash.value,
             TradingStore.transactions.value,
-            RegistrationStore.draft.value
+            RegistrationStore.draft.value,
+            TradingStore.syncError.value != null
         )
     )
 
@@ -62,7 +65,8 @@ class WalletViewModel : ViewModel() {
     private fun build(
         cash: Double,
         transactions: List<Transaction>,
-        draft: RegistrationDraft
+        draft: RegistrationDraft,
+        offline: Boolean
     ): WalletUiState {
         val label = if (draft.accountNumber.isBlank()) {
             "No payment account saved yet"
@@ -75,7 +79,8 @@ class WalletViewModel : ViewModel() {
             cashHistory = transactions
                 .filter { it.isCash }
                 .sortedByDescending { it.id }
-                .take(10)
+                .take(10),
+            isOffline = offline
         )
     }
 

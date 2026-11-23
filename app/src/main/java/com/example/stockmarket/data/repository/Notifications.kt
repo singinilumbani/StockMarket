@@ -80,4 +80,9 @@ object NotificationStore {
     fun markAllRead() {
         _items.update { list -> list.map { it.copy(read = true) } }
     }
+
+    // Called when the user logs out, so the next person never sees these
+    fun clear() {
+        _items.value = emptyList()
+    }
 }

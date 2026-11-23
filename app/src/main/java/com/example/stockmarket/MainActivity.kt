@@ -25,16 +25,48 @@ import com.example.stockmarket.data.repository.SessionManager
 import com.example.stockmarket.data.repository.SessionState
 import com.example.stockmarket.data.repository.TradingStore
 import com.example.stockmarket.data.repository.RegistrationStore
+import com.example.stockmarket.data.local.AccountCache
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.example.stockmarket.background.AppVisibility
+import com.example.stockmarket.background.BackgroundSync
+import com.example.stockmarket.background.Notifier
+import kotlinx.coroutines.flow.first
+import com.example.stockmarket.BuildConfig
 
-// How often to ask the server for new prices. Use 20_000L (20 seconds) while testing.
 private const val REFRESH_EVERY_MS = 5 * 60 * 1000L
+// After a failed refresh, try again sooner, so the banner clears soon after the connection returns
+private const val RETRY_EVERY_MS = 30_000L
 
 class MainActivity : ComponentActivity() {
+
+    private val askForNotifications =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private var askedThisTime = false
     override fun onCreate(savedInstanceState: Bundle?) {
         // MUST be first. It switches from the splash theme to Theme.StockMarket.
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         CompanyRepository.init(applicationContext)
+        AccountCache.init(applicationContext)
+        Notifier.createChannel(applicationContext)
+
+        // Once somebody is logged in, ask (Android 13 and above) for permission to show notifications
+        lifecycleScope.launch {
+            SessionManager.state.first { it is SessionState.LoggedIn }
+            if (!askedThisTime &&
+                Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                askedThisTime = true
+                askForNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
         SessionManager.init(applicationContext)
 
         // Keep the splash screen until we know whether a saved login exists
@@ -49,7 +81,7 @@ class MainActivity : ComponentActivity() {
                     SessionManager.verify()
                     if (SessionManager.currentToken() != null) TradingStore.refresh()
                     if (SessionManager.currentToken() != null) RegistrationStore.refresh()
-                    delay(REFRESH_EVERY_MS)
+                    delay(if (TradingStore.syncError.value != null) RETRY_EVERY_MS else REFRESH_EVERY_MS)
                 }
             }
         }
@@ -84,5 +116,17 @@ class MainActivity : ComponentActivity() {
                 AppNavigation()
             }
         }
+    }
+    override fun onStart() {
+        super.onStart()
+        AppVisibility.isVisible = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppVisibility.isVisible = false
+        // TESTING ONLY, in the debug build: 20 seconds after you leave the app, run one background
+        // check, so you do not have to wait 15 minutes. The demo and release builds do not do this.
+        if (BuildConfig.BUILD_TYPE == "debug") BackgroundSync.runSoon(applicationContext)
     }
 }

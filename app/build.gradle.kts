@@ -22,10 +22,27 @@ android {
     }
 
     buildTypes {
+
+        debug {
+            // Your phone on a USB cable, using "adb reverse"
+            buildConfigField("String", "API_BASE_URL", "\"http://localhost:8080/api/v1/\"")
+        }
+
+
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            buildConfigField("String", "API_BASE_URL", "\"https://mse-invest-api.onrender.com/api/v1/\"")
+        }
+
+        create("demo") {
+            initWith(getByName("debug"))
+            buildConfigField("String", "API_BASE_URL", "\"https://mse-invest-api.onrender.com/api/v1/\"")
+            matchingFallbacks += listOf("debug")
         }
     }
     compileOptions {
@@ -34,6 +51,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -71,6 +89,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.4")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
 
 
 }

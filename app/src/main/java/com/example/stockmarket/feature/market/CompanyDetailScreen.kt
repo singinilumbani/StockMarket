@@ -51,15 +51,20 @@ fun CompanyDetailScreen(
     onBack: () -> Unit,
     onToggleWatch: () -> Unit,
     onTrade: (OrderSide) -> Unit,
-    onRegisterClick: () -> Unit
+    onRegisterClick: () -> Unit,
+    isOffline: Boolean = false,
+    onRetry: () -> Unit = {}
 ) {
     val companies by CompanyRepository.companies.collectAsState()
     val company = companies.find { it.symbol == symbol }
     var gateOpen by remember { mutableStateOf(false) }
+    var offlineOpen by remember { mutableStateOf(false) }
 
     // THE GATE: only approved users reach the order ticket
     val handleTrade: (OrderSide) -> Unit = { side ->
-        if (registrationStatus == RegistrationStatus.APPROVED) {
+        if (isOffline) {
+            offlineOpen = true
+        } else if (registrationStatus == RegistrationStatus.APPROVED) {
             onTrade(side)
         } else {
             gateOpen = true
@@ -144,6 +149,23 @@ fun CompanyDetailScreen(
                 ) { Text("Buy") }
             }
         }
+    }
+
+    if (offlineOpen) {
+        AlertDialog(
+            onDismissRequest = { offlineOpen = false },
+            title = { Text("Can't reach the server") },
+            text = {
+                Text("Orders need a connection to the server, so the price and your cash can be checked. Try again when the connection is back.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    offlineOpen = false
+                    onRetry()
+                }) { Text("Retry") }
+            },
+            dismissButton = { TextButton(onClick = { offlineOpen = false }) { Text("Close") } }
+        )
     }
 
     if (gateOpen) {
