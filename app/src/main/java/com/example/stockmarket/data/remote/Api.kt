@@ -9,7 +9,8 @@ import retrofit2.http.GET
 import com.example.stockmarket.data.repository.SessionManager
 import okhttp3.Interceptor
 import okhttp3.Response
-
+import com.example.stockmarket.BuildConfig
+import java.util.concurrent.TimeUnit
 // What the server sends. The names must match the JSON keys exactly.
 data class CompanyDto(
     val symbol: String,
@@ -22,7 +23,8 @@ data class CompanyDto(
 )
 
 object ApiConfig {
-    const val BASE_URL = "http://10.255.208.194:8080/api/v1/"
+    // Comes from the build type: debug = your computer over USB, demo = the cloud server
+    val BASE_URL: String = BuildConfig.API_BASE_URL
 }
 
 interface MseApi {
@@ -57,6 +59,10 @@ object Api {
     }
 
     private val client = OkHttpClient.Builder()
+        // A free cloud server can take about a minute to wake up, so the app has to be patient
+        .connectTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .addInterceptor(AuthInterceptor())
         .addInterceptor(
             HttpLoggingInterceptor().apply {

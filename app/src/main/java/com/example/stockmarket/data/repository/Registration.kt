@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
+import com.example.stockmarket.data.local.AccountCache
 
 data class RegistrationDraft(
     val step: Int = 0,
@@ -55,6 +56,8 @@ object RegistrationStore {
     private var pollJob: Job? = null
     private var draftLoaded = false     // has the form been loaded from the server since login?
     private var generation = 0          // goes up on every logout, so late answers are ignored
+    private var currentUserId: Int? = null
+    private var synced = false          // has the server answered since this login?
 
     // ---------- Typing in the wizard (only changes the phone's copy) ----------
 
@@ -69,8 +72,36 @@ object RegistrationStore {
     // ---------- Talking to the server ----------
 
     // Called right after a login
-    fun onLoggedIn() {
-        scope.launch { refresh() }
+    // Called right after a login
+    fun onLoggedIn(userId: Int) {
+        if (currentUserId != null && currentUserId != userId) reset()
+        currentUserId = userId
+        val gen = generation
+        scope.launch {
+            // Show the status we saved last time, so Home does not say "Register to start trading" when offline
+            val cached = AccountCache.readRegistration(userId)
+            val saved = cached?.let { runCatching { RegistrationStatus.valueOf(it.status) }.getOrNull() }
+            if (saved != null && gen == generation && !synced) {
+                _status.value = saved
+            }
+            refresh()
+        }
+    }
+
+    // Only the status is saved. The form, with its ID number, is never written to the phone.
+    private fun saveStatusToCache(status: RegistrationStatus) {
+        val userId = currentUserId ?: return
+        val gen = generation
+        scope.launch {
+            if (gen != generation) return@launch
+            try {
+                AccountCache.saveRegistration(userId, status.name)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // a failed save must never break the app
+            }
+        }
     }
 
     // Returns an error message, or null when it worked
@@ -134,6 +165,8 @@ object RegistrationStore {
         generation++
         pollJob?.cancel()
         draftLoaded = false
+        synced = false
+        currentUserId = null
         _draft.value = RegistrationDraft()
         _status.value = RegistrationStatus.NOT_STARTED
     }
@@ -160,6 +193,8 @@ object RegistrationStore {
             draftLoaded = true
         }
         _status.value = server
+        synced = true
+        saveStatusToCache(server)
 
         // The review finished while we were waiting: tell the user
         if (previous == RegistrationStatus.PENDING && server == RegistrationStatus.APPROVED) {

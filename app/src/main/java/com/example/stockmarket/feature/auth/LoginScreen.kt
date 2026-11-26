@@ -138,6 +138,15 @@ fun LoginContent(
             }
         }
 
+        if (state.isLoading) {
+            Text(
+                text = "Connecting... the demo server can take up to a minute to wake up.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp).align(Alignment.CenterHorizontally)
+            )
+        }
+
         TextButton(
             onClick = onCreateAccount,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -145,12 +154,7 @@ fun LoginContent(
 
         Spacer(Modifier.height(16.dp))
 
-        Text(
-            text = "Sample account for testing: demo@mse.test / Password1",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
+
     }
 
     if (forgotOpen) {

@@ -16,5 +16,9 @@ object WatchlistStore {
             if (symbol in list) list - symbol else list + symbol
         }
     }
+
+    fun clear() {
+        _symbols.value = emptyList()
+    }
 }
 

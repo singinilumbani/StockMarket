@@ -51,6 +51,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import com.example.stockmarket.data.repository.SessionManager
 import com.example.stockmarket.data.repository.SessionState
+import com.example.stockmarket.data.repository.TradingStore
+import com.example.stockmarket.ui.components.SyncBanner
 
 
 
@@ -106,10 +108,13 @@ private fun AppNavHost(startDestination: String) {
 
     val registrationStatus by RegistrationStore.status.collectAsState()
     val watched by WatchlistStore.symbols.collectAsState()
+    val syncError by TradingStore.syncError.collectAsState()
 
     // The bottom bar shows on the five main tabs, and hides while the keyboard is open
     val imeVisible = WindowInsets.isImeVisible
     val showBottomBar = tabs.any { it.route == currentRoute } && !imeVisible
+    // The banner draws nothing unless the last refresh failed
+    val showSyncBanner = currentRoute in listOf(Routes.HOME, Routes.PORTFOLIO, Routes.HISTORY, Routes.WALLET)
 
     fun goToTab(route: String) {
         navController.navigate(route) {
@@ -120,6 +125,8 @@ private fun AppNavHost(startDestination: String) {
     }
 
     Scaffold(
+        topBar = { if (showSyncBanner) SyncBanner() },
+
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -227,7 +234,9 @@ private fun AppNavHost(startDestination: String) {
                     onBack = { navController.popBackStack() },
                     onToggleWatch = { WatchlistStore.toggle(symbol) },
                     onTrade = { side -> navController.navigate(Routes.order(symbol, side)) },
-                    onRegisterClick = { navController.navigate(Routes.REGISTER) }
+                    onRegisterClick = { navController.navigate(Routes.REGISTER) },
+                    isOffline = syncError != null,
+                    onRetry = { TradingStore.retry() }
                 )
             }
 

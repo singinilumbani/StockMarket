@@ -21,7 +21,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import java.net.UnknownHostException
 import kotlin.coroutines.cancellation.CancellationException
-
+import com.example.stockmarket.background.BackgroundSync
 sealed interface SessionState {
     data object Loading : SessionState
     data object LoggedOut : SessionState
@@ -35,6 +35,7 @@ object SessionManager {
     private val gson = Gson()
 
     private var storage: SessionStorage? = null
+    private var appContext: Context? = null
 
     // Read by the network interceptor on other threads, so it is @Volatile
     @Volatile
@@ -57,6 +58,7 @@ object SessionManager {
 
     fun init(context: Context) {
         if (storage != null) return
+        appContext = context.applicationContext
         val sessionStorage = SessionStorage(context)
         storage = sessionStorage
 
@@ -70,8 +72,9 @@ object SessionManager {
 
                 token = saved.token
                 _state.value = SessionState.LoggedIn(saved.user)
-                TradingStore.onLoggedIn()
-                RegistrationStore.onLoggedIn()
+                BackgroundSync.schedule(context.applicationContext)
+                TradingStore.onLoggedIn(saved.user.id)
+                RegistrationStore.onLoggedIn(saved.user.id)
 
                 verify()
             }
@@ -105,8 +108,9 @@ object SessionManager {
             token = response.token
             saveQuietly(StoredSession(response.token, response.user))
             _state.value = SessionState.LoggedIn(response.user)
-            TradingStore.onLoggedIn()
-            RegistrationStore.onLoggedIn()
+            appContext?.let { BackgroundSync.schedule(it) }
+            TradingStore.onLoggedIn(response.user.id)
+            RegistrationStore.onLoggedIn(response.user.id)
             null
         } catch (e: CancellationException) {
             throw e
@@ -158,15 +162,28 @@ object SessionManager {
         notice = message
         _state.value = SessionState.LoggedOut
 
+        // Forget EVERYTHING that belongs to the person who just left
+        TradingStore.clear()
+        RegistrationStore.reset()
+        NotificationStore.clear()
+        WatchlistStore.clear()
+        appContext?.let { BackgroundSync.cancel(it) }    // delete this line if you have not done Lesson 37
+
         scope.launch {
             try {
                 storage?.clear()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-
+                // ignored on purpose
             }
         }
+    }
+
+    suspend fun tokenForBackground(context: Context): StoredSession? {
+        val saved = SessionStorage(context.applicationContext).read() ?: return null
+        if (token == null) token = saved.token
+        return saved
     }
 }
 

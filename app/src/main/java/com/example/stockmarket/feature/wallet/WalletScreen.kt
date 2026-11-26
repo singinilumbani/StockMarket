@@ -102,10 +102,12 @@ fun WalletContent(
                 ) {
                     Button(
                         onClick = { action = CashAction.DEPOSIT },
+                        enabled = !state.isOffline,
                         modifier = Modifier.weight(1f).height(52.dp)
                     ) { Text("Deposit") }
                     OutlinedButton(
                         onClick = { action = CashAction.WITHDRAW },
+                        enabled = !state.isOffline,
                         modifier = Modifier.weight(1f).height(52.dp)
                     ) { Text("Withdraw") }
                 }
